@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 from nomad.config import config
 from nomad.datamodel.data import Schema
 from nomad.datamodel.metainfo.annotations import ELNAnnotation, ELNComponentEnum
-from nomad.datamodel.metainfo.plot import PlotSection
+from nomad.datamodel.metainfo.plot import PlotlyFigure, PlotSection
 from nomad.metainfo import MSection, Quantity, SchemaPackage, SubSection
 
 configuration = config.get_plugin_entry_point(
@@ -70,6 +70,46 @@ class MRIQAPlot(Schema, PlotSection):
     )
     description = Quantity(type=str, shape=['*'], description='MRI series description.')
     coil = Quantity(type=str, shape=['*'], description='MRI coil identifier.')
+
+    def normalize(self, archive, logger):
+        super().normalize(archive, logger)
+        # Custom YAML plots take precedence. Otherwise provide a usable figure
+        # for entries created directly from this base or a minimal derived schema.
+        if any(
+            self.m_def.m_get_annotations(annotation, None)
+            for annotation in (
+                'plotly_graph_object',
+                'plotly_express',
+                'plotly_subplots',
+            )
+        ):
+            return
+        self.figures = [
+            PlotlyFigure(
+                label='ROI SNR over time',
+                open=True,
+                figure={
+                    'data': [
+                        {
+                            'type': 'scatter',
+                            'mode': 'lines+markers',
+                            'x': list(self.datetime)
+                            if self.datetime is not None
+                            else [],
+                            'y': list(self.roi_snr) if self.roi_snr is not None else [],
+                        }
+                    ],
+                    'layout': {
+                        'title': {'text': 'ROI SNR over time'},
+                        'xaxis': {
+                            'title': {'text': 'Measurement time'},
+                            'type': 'date',
+                        },
+                        'yaxis': {'title': {'text': 'ROI SNR'}},
+                    },
+                },
+            )
+        ]
 
 
 m_package.__init_metainfo__()

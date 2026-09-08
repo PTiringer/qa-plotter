@@ -90,3 +90,33 @@ def test_yaml_schema_fetches_before_plotting():
     assert list(archive.data.m_resolve(trace['x'][1:])) == [
         item.timestamp for item in MEASUREMENTS
     ]
+
+
+@pytest.mark.parametrize('derived', [False, True])
+def test_default_plot_without_yaml_annotations(tmp_path, derived):
+    archive = EntryArchive(metadata=EntryMetadata(), data=MRIQAPlot())
+    if derived:
+        path = tmp_path / 'minimal.archive.yaml'
+        path.write_text(
+            'definitions:\n  sections:\n    MRI_QA:\n      base_sections:\n'
+            '        - qa_plotter.schema_packages.schema_package.MRIQAPlot\n'
+            'data:\n  m_def: MRI_QA\n'
+        )
+        archive = EntryArchive(metadata=EntryMetadata())
+        ArchiveParser().parse(str(path), archive)
+    with patch(FETCH, return_value=MEASUREMENTS):
+        normalize_all(archive)
+        normalize_all(archive)
+    assert len(archive.data.figures) == 1
+    figure = archive.data.figures[0]
+    assert figure.open is True
+    assert figure.label == 'ROI SNR over time'
+    trace = figure.figure['data'][0]
+    assert trace['x'] == [item.timestamp for item in MEASUREMENTS]
+    assert trace['y'] == [10.0, 20.0]
+    # Verify the serialized archive contains the figure consumed by the GUI.
+    assert archive.m_to_dict()['data']['figures'][0]['figure']['data'][0] == trace
+    with patch(FETCH, return_value=[]):
+        normalize_all(archive)
+    assert len(archive.data.figures) == 1
+    assert archive.data.figures[0].figure['data'][0]['y'] == []

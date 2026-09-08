@@ -24,6 +24,9 @@ Remove `data_file`, `TableData`, and the `tabular`/`tabular_parser` annotations.
 The new base already supplies `EntryData`, `PlotSection`, and the four array
 quantities `datetime`, `roi_snr`, `description`, and `coil`. Keep your existing
 `plotly_graph_object` annotation referencing `#datetime` and `#roi_snr`.
+Without a custom plotting annotation, the base generates an open ROI SNR over
+time figure automatically. This also works for entries created directly from
+`MRIQAPlot`. Existing entries must be reprocessed after updating the plugin.
 The supplied example also includes `data: {m_def: MRI_QA}` to create an entry
 using its embedded schema; a schema definition alone does not fetch data.
 
