@@ -4,6 +4,102 @@ A plotter for the mri qa data containing the scraping
 
 This `nomad` plugin was generated with `Cookiecutter` along with `@nomad`'s [`cookiecutter-nomad-plugin`](https://github.com/FAIRmat-NFDI/cookiecutter-nomad-plugin) template.
 
+## Fetch MANATI data during normalization (no CSV required)
+
+Use the ready-to-upload schema and entry in
+[`mri_qa.archive.yaml`](src/qa_plotter/example_uploads/manati_qa/mri_qa.archive.yaml).
+After deploying the updated plugin, upload that file once and process it.
+Reprocess the entry whenever you want to fetch current MANATI data and refresh
+its plot. This is triggered by normalization, not by opening the plot, and is
+not a scheduled background scraper.
+
+For an existing YAML plotting schema, replace its `base_sections` with:
+
+```yaml
+base_sections:
+  - qa_plotter.schema_packages.schema_package.MRIQAPlot
+```
+
+Remove `data_file`, `TableData`, and the `tabular`/`tabular_parser` annotations.
+The new base already supplies `EntryData`, `PlotSection`, and the four array
+quantities `datetime`, `roi_snr`, `description`, and `coil`. Keep your existing
+`plotly_graph_object` annotation referencing `#datetime` and `#roi_snr`.
+The supplied example also includes `data: {m_def: MRI_QA}` to create an entry
+using its embedded schema; a schema definition alone does not fetch data.
+
+The plugin normalizer runs before NOMAD's metainfo/plot normalization. It fetches
+all matching measurements, sorts them by acquisition time, and replaces the four
+aligned arrays. It only handles entries derived from `MRIQAPlot`; other entries
+and CSV imports do not trigger MANATI requests. Failed fetches raise a processing
+error without replacing the current in-memory arrays. An empty successful fetch
+clears them. The plot retains your single-trace design, including measurements
+from different descriptions and coils.
+
+The default connection matches the original script. To override it, configure
+the plugin in the deployment's NOMAD configuration (and preserve this in the
+configuration template used by your deployment script):
+
+```yaml
+plugins:
+  entry_points:
+    options:
+      'qa_plotter.normalizers:normalizer_entry_point':
+        base_url: 'http://manati:3000'
+        scanner: 'MAGNETOM Terra.X'
+        collection: 'QA_7T'
+        timeout: 30
+```
+
+The NOMAD processing worker must be able to resolve and reach `manati:3000`.
+Commit and push the plugin changes, then the distribution's submodule revision,
+and run `deploy.sh update` before using this schema.
+
+## MANATI QA export and NOMAD import
+
+Install the plugin into your Python environment (`pip install .` from this folder).
+Run the scraper on a machine that can reach MANATI:
+
+```sh
+qa-plotter-scrape --output mri_qa.csv
+```
+
+The defaults match the original script: `http://manati:3000`, scanner
+`MAGNETOM Terra.X`, and collection `QA_7T`. Override them when needed:
+
+```sh
+qa-plotter-scrape --base-url http://manati:3000 \
+  --scanner "MAGNETOM Terra.X" --collection QA_7T \
+  --timeout 30 --output mri_qa.csv
+```
+
+`python -m qa_plotter.scraper` accepts the same options. The command reads the
+MANATI API; it does not modify MANATI or automatically upload data to NOMAD.
+Each invocation exports all matching measurements, sorted by acquisition time,
+and replaces the output file only after a successful export. It does not append
+or deduplicate measurements. A missing QA collection (HTTP 404) is skipped;
+other HTTP errors, timeouts, and malformed measurements fail the command.
+An empty result produces a header-only CSV. The timeout applies to each request.
+
+Upload `mri_qa.csv` through NOMAD's upload interface and process the upload.
+With this plugin installed, NOMAD recognizes CSV files with this exact header:
+
+```csv
+datetime,ROI_SNR,Description,Coil
+```
+
+The entry's `data` contains `source_file`, `measurement_count`, and repeated
+`series` sections, one per `(Description, Coil)` pair. Each series stores
+`description`, `coil`, and aligned arrays `datetime` and `roi_snr`, ordered by
+time. These CSV-import arrays are available for subsequent plotting. For automatic
+fetching and a plot, use the normalization workflow above. Timestamps are ISO strings in MANATI's local
+time, without an inferred timezone, and SNR is dimensionless. The original
+four-column CSV format is retained, so scanner and collection are not embedded
+in the file: use separate exports for different scanner/collection selections.
+
+After modifying this submodule, commit and push it first, then commit and push
+the updated `packages/qa-plotter` revision in the distribution repository.
+Run `deploy.sh update` to rebuild the image with the new scraper and parser.
+
 ## Development
 
 If you want to develop locally this plugin, clone the project and in the plugin folder, create a virtual environment (you can use Python 3.10, 3.11 or 3.12):

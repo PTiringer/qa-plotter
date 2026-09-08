@@ -1,0 +1,22 @@
+definitions:
+  name: MRI QA plotting schema
+  sections:
+    MRI_QA:
+      base_sections:
+        - qa_plotter.schema_packages.schema_package.MRIQAPlot
+      m_annotations:
+        plotly_graph_object:
+          data:
+            type: scatter
+            mode: lines+markers
+            x: '#datetime'
+            y: '#roi_snr'
+          layout:
+            title: ROI SNR over time
+            xaxis:
+              title: Measurement time
+            yaxis:
+              title: ROI SNR
+
+data:
+  m_def: MRI_QA
